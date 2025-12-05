@@ -1,0 +1,1239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Steam游戏名称搜索</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2300a8ff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='8'></circle><line x1='21' y1='21' x2='16.65' y2='16.65'></line></svg>">
+    <!-- Tailwind CSS v3 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <!-- CryptoJS for Spark API -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <!-- Spark AI API -->
+    <script src="./spark-api.js"></script>
+    <script src="./init-spark.js"></script>
+    <!-- 统一的 Tailwind 配置 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#1b2838',
+                        secondary: '#2a475e',
+                        accent: '#00a8ff',
+                        dark: '#171a21',
+                        light: '#c7d5e0',
+                        success: '#4caf50',
+                        loading: '#f39c12'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .text-shadow {
+                text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            .bg-blur {
+                backdrop-filter: blur(8px);
+            }
+            .transition-height {
+                transition: max-height 0.3s ease-in-out;
+            }
+            
+            /* 3D Tilt Effect */
+            .tilt-card {
+                transform-style: preserve-3d;
+                transform: perspective(1000px);
+            }
+            
+            .tilt-content {
+                transform: translateZ(20px);
+            }
+
+            /* Glitch Effect */
+            .glitch {
+                position: relative;
+            }
+            
+            .glitch::before,
+            .glitch::after {
+                content: attr(data-text);
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+            }
+            
+            .glitch::before {
+                left: 2px;
+                text-shadow: -1px 0 #ff00c1;
+                clip: rect(44px, 450px, 56px, 0);
+                animation: glitch-anim-1 5s infinite linear alternate-reverse;
+            }
+            
+            .glitch::after {
+                left: -2px;
+                text-shadow: -1px 0 #00fff9;
+                clip: rect(44px, 450px, 56px, 0);
+                animation: glitch-anim-2 5s infinite linear alternate-reverse;
+            }
+            
+            @keyframes glitch-anim-1 {
+                0% { clip: rect(30px, 9999px, 10px, 0); }
+                20% { clip: rect(85px, 9999px, 90px, 0); }
+                40% { clip: rect(10px, 9999px, 60px, 0); }
+                60% { clip: rect(60px, 9999px, 20px, 0); }
+                80% { clip: rect(25px, 9999px, 40px, 0); }
+                100% { clip: rect(5px, 9999px, 85px, 0); }
+            }
+            
+            @keyframes glitch-anim-2 {
+                0% { clip: rect(65px, 9999px, 100px, 0); }
+                20% { clip: rect(15px, 9999px, 30px, 0); }
+                40% { clip: rect(90px, 9999px, 10px, 0); }
+                60% { clip: rect(10px, 9999px, 55px, 0); }
+                80% { clip: rect(50px, 9999px, 25px, 0); }
+                100% { clip: rect(20px, 9999px, 60px, 0); }
+            }
+
+            /* Typing Cursor */
+            .typing-cursor::after {
+                content: '|';
+                animation: blink 1s infinite;
+            }
+            
+            @keyframes blink {
+                0%, 100% { opacity: 1; }
+                50% { opacity: 0; }
+            }
+        }
+        
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #1b2838;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #2a475e;
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #00a8ff;
+        }
+        
+        /* 输入框聚焦效果 */
+        .input-focus {
+            @apply focus:ring-2 focus:ring-accent focus:border-accent transition-all duration-300;
+        }
+        
+        /* 按钮悬停效果 */
+        .btn-hover {
+            @apply hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all duration-200;
+        }
+        
+        /* 卡片悬停效果 */
+        .card-hover {
+            @apply hover:shadow-lg hover:border-accent/50 transition-all duration-300;
+        }
+    </style>
+</head>
+<body class="bg-dark text-light min-h-screen flex flex-col">
+    <!-- 页面背景 -->
+    <div class="fixed inset-0 z-0">
+        <div class="absolute inset-0 bg-gradient-to-br from-primary to-dark"></div>
+        <!-- 粒子特效画布 -->
+        <canvas id="bgCanvas" class="absolute inset-0 opacity-40"></canvas>
+    </div>
+
+    <!-- 主容器 -->
+    <div class="relative z-10 container mx-auto px-4 py-8 flex-grow flex flex-col">
+        
+        <!-- 主内容区 -->
+        <main id="mainContainer" class="flex-grow flex flex-col justify-center max-w-3xl mx-auto w-full transition-all duration-700 ease-in-out">
+            <!-- 头部 -->
+            <header class="mb-8 text-center">
+                <div class="flex items-center justify-center mb-2">
+                    <i class="fa fa-steam text-4xl text-accent mr-3"></i>
+                    <h1 class="text-4xl md:text-5xl font-bold text-shadow glitch" data-text="Steam游戏名称搜索">Steam游戏名称搜索</h1>
+                </div>
+                <p class="text-light/70 max-w-2xl mx-auto">输入中文游戏名称，获取对应的英文名称，轻松在Steam上搜索你喜欢的游戏</p>
+            </header>
+
+            <!-- 输入区域 -->
+            <div class="bg-primary/80 rounded-xl p-6 mb-6 backdrop-blur-sm shadow-lg border border-secondary/50 tilt-card" data-tilt>
+                <div class="flex flex-col md:flex-row gap-4 tilt-content">
+                    <div class="flex-grow">
+                        <label for="gameName" class="block text-sm font-medium mb-2 text-light/80">中文游戏名称</label>
+                        <div class="relative">
+                            <input 
+                                type="text" 
+                                id="gameName" 
+                                class="w-full bg-dark/70 border border-secondary rounded-lg px-4 py-3 input-focus"
+                                placeholder="例如：赛博朋克2077"
+                                autocomplete="off"
+                            >
+                            <!-- 清除按钮 -->
+                            <button 
+                                id="clearBtn" 
+                                class="absolute right-3 top-1/2 -translate-y-1/2 text-light/50 hover:text-light transition-colors"
+                                type="button"
+                                style="display: none;"
+                            >
+                                <i class="fa fa-times-circle"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="md:w-40">
+                        <label class="block text-sm font-medium mb-2 text-light/80 opacity-0">转换</label>
+                        <button 
+                            id="translateBtn" 
+                            class="w-full bg-accent hover:bg-accent/90 text-white font-medium rounded-lg px-4 py-3 btn-hover flex items-center justify-center"
+                            type="button"
+                        >
+                            <span id="btnText">转换</span>
+                            <span id="loadingSpinner" class="ml-2 hidden">
+                                <i class="fa fa-circle-o-notch fa-spin"></i>
+                            </span>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 快速选择 -->
+                <div class="mt-4">
+                    <p class="text-sm text-light/70 mb-2">热门游戏快速选择：</p>
+                    <div class="flex flex-wrap gap-2">
+                        <button class="quick-select px-3 py-1 text-xs rounded-full bg-secondary/50 hover:bg-secondary text-light/90 hover:text-light transition-colors">赛博朋克2077</button>
+                        <button class="quick-select px-3 py-1 text-xs rounded-full bg-secondary/50 hover:bg-secondary text-light/90 hover:text-light transition-colors">艾尔登法环</button>
+                        <button class="quick-select px-3 py-1 text-xs rounded-full bg-secondary/50 hover:bg-secondary text-light/90 hover:text-light transition-colors">霍格沃茨之遗</button>
+                        <button class="quick-select px-3 py-1 text-xs rounded-full bg-secondary/50 hover:bg-secondary text-light/90 hover:text-light transition-colors">博德之门3</button>
+                        <button class="quick-select px-3 py-1 text-xs rounded-full bg-secondary/50 hover:bg-secondary text-light/90 hover:text-light transition-colors">幻兽帕鲁</button>
+                        <button class="quick-select px-3 py-1 text-xs rounded-full bg-secondary/50 hover:bg-secondary text-light/90 hover:text-light transition-colors">使命召唤</button>
+                        <button class="quick-select px-3 py-1 text-xs rounded-full bg-secondary/50 hover:bg-secondary text-light/90 hover:text-light transition-colors">辐射4</button>
+                        <button class="quick-select px-3 py-1 text-xs rounded-full bg-secondary/50 hover:bg-secondary text-light/90 hover:text-light transition-colors">极限竞速：地平线5</button>
+                        <button class="quick-select px-3 py-1 text-xs rounded-full bg-secondary/50 hover:bg-secondary text-light/90 hover:text-light transition-colors">FIFA 23</button>
+                        <button class="quick-select px-3 py-1 text-xs rounded-full bg-secondary/50 hover:bg-secondary text-light/90 hover:text-light transition-colors">模拟人生4</button>
+                        <a id="moreHotLink" href="https://www.yxk111.com/rmyx" target="_blank" rel="noopener noreferrer" class="px-3 py-1 text-xs rounded-full border border-orange-500/60 text-orange-400 bg-orange-500/10 hover:bg-orange-500/20 transition-colors">更多热门游戏</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 结果区域 -->
+            <div id="resultArea" class="hidden bg-primary/80 rounded-xl p-6 mb-6 backdrop-blur-sm shadow-lg border border-secondary/50 tilt-card" data-tilt>
+                <div class="tilt-content">
+                <h2 class="text-xl font-semibold mb-4 flex items-center">
+                    <i class="fa fa-check-circle text-success mr-2"></i>
+                    转换结果
+                </h2>
+                
+                <!-- 英文名称 -->
+                <div class="mb-4">
+                    <label class="block text-sm font-medium mb-2 text-light/80">英文名称</label>
+                    <div class="relative">
+                        <input 
+                            type="text" 
+                            id="englishName" 
+                            class="w-full bg-dark/70 border border-secondary rounded-lg px-4 py-3 input-focus"
+                            readonly
+                        >
+                        <button 
+                            id="copyBtn" 
+                            class="absolute right-3 top-1/2 -translate-y-1/2 text-light/70 hover:text-accent transition-colors"
+                            type="button"
+                        >
+                            <i class="fa fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 游戏信息 -->
+                <div id="gameInfo" class="mb-4">
+                    <label class="block text-sm font-medium mb-2 text-light/80">游戏信息</label>
+                    <div class="bg-dark/70 border border-secondary rounded-lg p-4 text-sm text-light/90 min-h-[60px]">
+                        <p id="gameDescription" class="italic typing-cursor">点击转换按钮获取游戏信息...</p>
+                    </div>
+                </div>
+                
+                <!-- Steam链接 -->
+                <div class="flex flex-wrap gap-3">
+                    <a 
+                        id="steamLink" 
+                        href="https://store.steampowered.com/" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        class="inline-flex items-center px-4 py-2 bg-secondary hover:bg-secondary/80 text-light rounded-lg btn-hover"
+                    >
+                        <i class="fa fa-external-link mr-2"></i>
+                        在Steam上查看
+                    </a>
+                    
+                    <a 
+                        id="playFreeBtn" 
+                        href="https://www.yxk111.com/" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        class="inline-flex items-center px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg btn-hover"
+                    >
+                        <i class="fa fa-gamepad mr-2"></i>
+                        免费开玩
+                    </a>
+                </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 底部 -->
+    <footer class="relative z-10 bg-primary/50 backdrop-blur-sm border-t border-secondary/30 py-4">
+        <div class="container mx-auto px-4 text-center text-light/60 text-sm">
+            <p class="mt-1">本工具仅用于帮助玩家查找游戏，与Valve Corporation无关</p>
+        </div>
+    </footer>
+
+    <!-- 通知提示 -->
+    <div id="notification" class="fixed bottom-4 right-4 bg-secondary rounded-lg shadow-lg p-4 max-w-xs transform translate-y-20 opacity-0 transition-all duration-300 z-50">
+        <div class="flex items-start">
+            <div id="notificationIcon" class="text-accent mr-3 text-xl">
+                <i class="fa fa-info-circle"></i>
+            </div>
+            <div class="flex-grow">
+                <h3 id="notificationTitle" class="font-medium text-light"></h3>
+                <p id="notificationMessage" class="text-sm text-light/80 mt-1"></p>
+            </div>
+            <button id="closeNotification" class="text-light/50 hover:text-light transition-colors">
+                <i class="fa fa-times"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- 免费试玩弹窗 -->
+    <div id="freePlayModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/90 backdrop-blur-md opacity-0 transition-all duration-300">
+        <div class="bg-primary border border-secondary/60 rounded-2xl p-10 max-w-4xl w-full mx-4 shadow-2xl transform scale-95 transition-all duration-300 relative">
+            <button id="closeFreePlayModal" class="absolute top-4 right-4 text-light/50 hover:text-light transition-colors z-10">
+                <i class="fa fa-times text-2xl"></i>
+            </button>
+            
+            <h3 class="text-3xl md:text-4xl font-bold text-white mb-4 text-center">免费畅玩账号</h3>
+            <div class="w-full flex justify-center mb-8">
+                <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/40">
+                    <i class="fa fa-star"></i>
+                    <span>使用账号享受永久会员，免费畅玩游戏！</span>
+                </div>
+            </div>
+            
+            <!-- Images -->
+            <div class="flex gap-6 mb-8 justify-center">
+                <div class="w-1/2 aspect-video bg-dark/50 rounded-xl overflow-hidden border border-secondary/50 shadow-lg group">
+                    <img src="1.png" alt="展示图1" class="free-play-img cursor-zoom-in w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" onerror="this.src='https://placehold.co/600x400/1b2838/c7d5e0?text=Image+1'">
+                </div>
+                <div class="w-1/2 aspect-video bg-dark/50 rounded-xl overflow-hidden border border-secondary/50 shadow-lg group">
+                    <img src="2.png" alt="展示图2" class="free-play-img cursor-zoom-in w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" onerror="this.src='https://placehold.co/600x400/1b2838/c7d5e0?text=Image+2'">
+                </div>
+            </div>
+            
+            <!-- Account Info -->
+            <div class="bg-dark/50 rounded-xl p-6 border border-secondary mb-6 relative">
+                <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+                    <div class="flex-grow space-y-3 w-full md:w-auto">
+                        <div class="flex justify-between md:justify-start items-center gap-4">
+                            <span class="text-light/60 min-w-[60px]">账号：</span>
+                            <span class="font-mono text-accent text-xl font-bold tracking-wider select-all">GXZH001</span>
+                        </div>
+                        <div class="flex justify-between md:justify-start items-center gap-4">
+                            <span class="text-light/60 min-w-[60px]">密码：</span>
+                            <span class="font-mono text-accent text-xl font-bold tracking-wider select-all">gxzh001</span>
+                        </div>
+                    </div>
+                    
+                    <button id="copyAccountBtn" class="w-full md:w-auto px-6 py-3 bg-secondary hover:bg-secondary/80 text-white rounded-lg transition-all duration-200 flex items-center justify-center gap-2 group btn-hover shrink-0">
+                        <i class="fa fa-clone group-hover:rotate-12 transition-transform"></i>
+                        <span>一键复制</span>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="text-center text-sm text-light/40 mb-8">
+                请妥善保管账号，禁止修改密码
+            </div>
+            
+            <button id="continueToSiteBtn" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold text-lg py-4 rounded-xl transition-colors flex items-center justify-center shadow-lg hover:shadow-orange-500/20">
+                <span>前往下载页面</span>
+                <i class="fa fa-arrow-right ml-2"></i>
+            </button>
+        </div>
+    </div>
+
+    <div id="imageZoomOverlay" class="fixed inset-0 z-[60] hidden items-center justify-center bg-black/90">
+        <img id="zoomImage" class="max-w-[90vw] max-h-[90vh] rounded-xl shadow-2xl" src="" alt="预览图">
+    </div>
+
+    <script>
+        // DOM元素
+        const mainContainer = document.getElementById('mainContainer');
+        const gameNameInput = document.getElementById('gameName');
+        const clearBtn = document.getElementById('clearBtn');
+        const translateBtn = document.getElementById('translateBtn');
+        const btnText = document.getElementById('btnText');
+        const loadingSpinner = document.getElementById('loadingSpinner');
+        const resultArea = document.getElementById('resultArea');
+        const englishNameInput = document.getElementById('englishName');
+        const copyBtn = document.getElementById('copyBtn');
+        const gameDescription = document.getElementById('gameDescription');
+        const steamLink = document.getElementById('steamLink');
+        const playFreeBtn = document.getElementById('playFreeBtn');
+        const notification = document.getElementById('notification');
+        const notificationIcon = document.getElementById('notificationIcon');
+        const notificationTitle = document.getElementById('notificationTitle');
+        const notificationMessage = document.getElementById('notificationMessage');
+        const closeNotification = document.getElementById('closeNotification');
+        const quickSelectBtns = document.querySelectorAll('.quick-select');
+        
+        // 弹窗元素
+        const freePlayModal = document.getElementById('freePlayModal');
+        const closeFreePlayModal = document.getElementById('closeFreePlayModal');
+        const copyAccountBtn = document.getElementById('copyAccountBtn');
+        const continueToSiteBtn = document.getElementById('continueToSiteBtn');
+        let isFirstFreePlayClick = true;
+        const moreHotLink = document.getElementById('moreHotLink');
+        let modalTargetUrl = '';
+        const imageZoomOverlay = document.getElementById('imageZoomOverlay');
+        const zoomImage = document.getElementById('zoomImage');
+
+        // 模拟游戏数据库
+        const gameDatabase = {
+            '赛博朋克2077': {
+                english: 'Cyberpunk 2077',
+                description: '《赛博朋克2077》是一款开放世界动作冒险RPG，由CD Projekt RED开发。游戏设定在夜之城，一个充满高科技与低生活的未来都市。'
+            },
+            '艾尔登法环': {
+                english: 'Elden Ring',
+                description: '《艾尔登法环》是一款由FromSoftware开发的动作角色扮演游戏，由Hidetaka Miyazaki与George R. R. Martin共同创作。'
+            },
+            'GTA5': {
+                english: 'Grand Theft Auto V',
+                description: '《侠盗猎车手V》是一款由Rockstar North开发的开放世界动作冒险游戏，是GTA系列的第五部主要作品。'
+            },
+            '英雄联盟': {
+                english: 'League of Legends',
+                description: '《英雄联盟》是一款由Riot Games开发的多人在线战术竞技游戏，是目前世界上最受欢迎的电子竞技项目之一。'
+            },
+            '守望先锋': {
+                english: 'Overwatch',
+                description: '《守望先锋》是一款由暴雪娱乐开发的团队第一人称射击游戏，以其多元化的英雄角色和团队合作为核心玩法。'
+            },
+            "幻兽帕鲁": { 
+                english: "Palworld", 
+                description: '《幻兽帕鲁》是一款开放世界生存制作游戏，由Pocketpair开发。玩家可以收集神秘的“帕鲁”生物，让它们战斗、建造、种田，支持多人联机合作。'
+            },
+            "博德之门3": { 
+                english: "Baldur's Gate 3", 
+                description: '《博德之门3》是一款由Larian Studios开发的角色扮演游戏，基于龙与地下城规则。游戏拥有丰富的剧情分支和回合制战斗系统，支持多人合作。'
+            },
+            "霍格沃茨之遗": { 
+                english: "Hogwarts Legacy", 
+                description: '《霍格沃茨之遗》是一款基于哈利波特魔法世界设定的开放世界动作RPG游戏，玩家可以体验1800年代的霍格沃茨魔法学校生活。'
+            },
+            "csgo2": { english: "Counter-Strike 2", description: "Counter-Strike 2" },
+            "反恐精英2": { english: "Counter-Strike 2", description: "Counter-Strike 2" },
+            "绝地求生": { english: "PUBG: BATTLEGROUNDS", description: "PUBG: BATTLEGROUNDS" },
+            "pubg": { english: "PUBG: BATTLEGROUNDS", description: "PUBG: BATTLEGROUNDS" },
+            "dota2": { english: "Dota 2", description: "Dota 2" },
+            "刀塔2": { english: "Dota 2", description: "Dota 2" },
+            "永劫无间": { english: "NARAKA: BLADEPOINT", description: "NARAKA: BLADEPOINT" },
+            "apex英雄": { english: "Apex Legends", description: "Apex Legends" },
+            "荒野大镖客2": { english: "Red Dead Redemption 2", description: "Red Dead Redemption 2" },
+            "只狼": { english: "Sekiro: Shadows Die Twice", description: "Sekiro: Shadows Die Twice" },
+            "怪物猎人世界": { english: "Monster Hunter: World", description: "Monster Hunter: World" },
+            "求生之路2": { english: "Left 4 Dead 2", description: "Left 4 Dead 2" },
+            "泰拉瑞亚": { english: "Terraria", description: "Terraria" },
+            "星露谷物语": { english: "Stardew Valley", description: "Stardew Valley" },
+            "空洞骑士": { english: "Hollow Knight", description: "Hollow Knight" },
+            "哈迪斯": { english: "Hades", description: "Hades" },
+            "双人成行": { english: "It Takes Two", description: "It Takes Two" },
+            "巫师3": { english: "The Witcher 3: Wild Hunt", description: "The Witcher 3: Wild Hunt" },
+            "文明6": { english: "Sid Meier's Civilization VI", description: "Sid Meier's Civilization VI" },
+            "这是我的战争": { english: "This War of Mine", description: "This War of Mine" },
+            "饥荒": { english: "Don't Starve Together", description: "Don't Starve Together" },
+            "森林": { english: "The Forest", description: "The Forest" },
+            "七日杀": { english: "7 Days to Die", description: "7 Days to Die" },
+            "方舟生存进化": { english: "ARK: Survival Evolved", description: "ARK: Survival Evolved" },
+            "Rust": { english: "Rust", description: "Rust" },
+            "腐蚀": { english: "Rust", description: "Rust" },
+            "欧洲卡车模拟2": { english: "Euro Truck Simulator 2", description: "Euro Truck Simulator 2" },
+            "壁纸引擎": { 
+                english: "Wallpaper Engine", 
+                description: '《壁纸引擎》是一款动态壁纸软件，允许用户创建和分享动态壁纸，支持视频、网页、应用程序等多种格式。'
+            },
+            "小红车": { 
+                english: "Wallpaper Engine", 
+                description: '《壁纸引擎》是一款动态壁纸软件，允许用户创建和分享动态壁纸，支持视频、网页、应用程序等多种格式。'
+            },
+            "命运2": { 
+                english: "Destiny 2", 
+                description: '《命运2》是一款由Bungie开发的第一人称射击游戏，结合了MMORPG元素，玩家扮演守护者保护人类文明。'
+            },
+            "战地2042": { 
+                english: "Battlefield 2042", 
+                description: '《战地2042》是一款由DICE开发的第一人称射击游戏，支持128人大型战场，拥有动态天气和破坏系统。'
+            },
+            "使命召唤": { 
+                english: "Call of Duty", 
+                description: '《使命召唤》系列是由动视发行的第一人称射击游戏，以其电影化叙事和多人对战模式闻名。'
+            },
+            "战锤40K：暗潮": { 
+                english: "Warhammer 40,000: Darktide", 
+                description: '《战锤40K：暗潮》是一款合作射击游戏，玩家在战锤40K宇宙中对抗异端和异形威胁。'
+            },
+            "深岩银河": { 
+                english: "Deep Rock Galactic", 
+                description: '《深岩银河》是一款合作射击游戏，玩家扮演矮人矿工在危险的外星洞穴中采矿和战斗。'
+            },
+            "鬼泣5": { 
+                english: "Devil May Cry 5", 
+                description: '《鬼泣5》是一款由卡普空开发的动作游戏，以其华丽的连招系统和独特的角色设计著称。'
+            },
+            "生化危机4重制版": { 
+                english: "Resident Evil 4 Remake", 
+                description: '《生化危机4重制版》是对经典生存恐怖游戏的完全重制，拥有现代化的画面和改进的游戏机制。'
+            },
+            "死亡搁浅": { 
+                english: "Death Stranding", 
+                description: '《死亡搁浅》是小岛秀夫工作室开发的开放世界动作游戏，玩家在末日世界中连接孤立的城市。'
+            },
+            "对马岛之魂": { 
+                english: "Ghost of Tsushima", 
+                description: '《对马岛之魂》是一款开放世界动作冒险游戏，玩家扮演武士在对马岛上对抗蒙古入侵。'
+            },
+            "战神4": { 
+                english: "God of War", 
+                description: '《战神4》是战神系列的重启之作，奎托斯来到北欧神话世界，与儿子阿特柔斯展开新的冒险。'
+            },
+            "地平线：零之曙光": { 
+                english: "Horizon Zero Dawn", 
+                description: '《地平线：零之曙光》是一款开放世界动作RPG，玩家在机器生物统治的后末日世界中探索和生存。'
+            },
+            "刺客信条：英灵殿": { 
+                english: "Assassin's Creed Valhalla", 
+                description: '《刺客信条：英灵殿》以维京时代为背景，玩家扮演维京战士在英格兰建立定居点。'
+            },
+            "辐射4": { 
+                english: "Fallout 4", 
+                description: '《辐射4》是一款后末日开放世界RPG，玩家在核战后的波士顿废土中寻找失踪的儿子。'
+            },
+            "星界边境": { 
+                english: "Starbound", 
+                description: '《星界边境》是一款2D沙盒游戏，玩家可以探索程序生成的星球，建造基地和对抗外星生物。'
+            },
+            "无人深空": { 
+                english: "No Man's Sky", 
+                description: '《无人深空》是一款太空探索游戏，拥有近乎无限的宇宙，玩家可以探索、交易和生存。'
+            },
+            "星际战甲": { 
+                english: "Warframe", 
+                description: '《星际战甲》是一款免费科幻动作游戏，玩家操控战甲在太阳系中执行任务。'
+            },
+            "星际公民": { 
+                english: "Star Citizen", 
+                description: '《星际公民》是一款太空模拟游戏，拥有庞大的宇宙和逼真的飞船模拟系统。'
+            },
+            "极限竞速：地平线5": { 
+                english: "Forza Horizon 5", 
+                description: '《极限竞速：地平线5》是一款开放世界赛车游戏，背景设定在墨西哥，拥有丰富的车辆和赛事。'
+            },
+            "极品飞车：热度": { 
+                english: "Need for Speed Heat", 
+                description: '《极品飞车：热度》是一款街头赛车游戏，玩家在白天合法比赛，夜晚非法飙车。'
+            },
+            "FIFA 23": { 
+                english: "EA SPORTS FIFA 23", 
+                description: '《FIFA 23》是EA Sports开发的足球模拟游戏，拥有真实的球员和球队授权。'
+            },
+            "NBA 2K24": { 
+                english: "NBA 2K24", 
+                description: '《NBA 2K24》是2K Sports开发的篮球模拟游戏，拥有逼真的球员动作和球队管理功能。'
+            },
+            "城市：天际线": { 
+                english: "Cities: Skylines", 
+                description: '《城市：天际线》是一款城市建设模拟游戏，玩家可以规划和管理自己的城市。'
+            },
+            "模拟人生4": { 
+                english: "The Sims 4", 
+                description: '《模拟人生4》是一款生活模拟游戏，玩家可以创建虚拟人物并控制他们的日常生活。'
+            },
+            "过山车之星": { 
+                english: "Planet Coaster", 
+                description: '《过山车之星》是一款主题公园模拟游戏，玩家可以设计和建造自己的游乐园。'
+            },
+            "动物园之星": { 
+                english: "Planet Zoo", 
+                description: '《动物园之星》是一款动物园模拟游戏，玩家可以建造和管理自己的动物园。'
+            },
+            "人类一败涂地": { 
+                english: "Human: Fall Flat", 
+                description: '《人类一败涂地》是一款物理模拟解谜游戏，玩家操控软绵绵的角色在各种场景中解谜。'
+            },
+            "鹅作剧": { 
+                english: "Untitled Goose Game", 
+                description: '《鹅作剧》是一款模拟游戏，玩家扮演一只鹅在村庄中制造混乱和恶作剧。'
+            },
+            "茶杯头": { 
+                english: "Cuphead", 
+                description: '《茶杯头》是一款以1930年代卡通风格为特色的跑动射击游戏，难度较高。'
+            },
+            "奥日与黑暗森林": { 
+                english: "Ori and the Blind Forest", 
+                description: '《奥日与黑暗森林》是一款平台冒险游戏，以其精美的艺术风格和感人的故事著称。'
+            },
+            "蔚蓝": { 
+                english: "Celeste", 
+                description: '《蔚蓝》是一款平台跳跃游戏，玩家帮助玛德琳攀登塞莱斯特山，同时面对内心的恐惧。'
+            },
+            "传说之下": { 
+                english: "Undertale", 
+                description: '《传说之下》是一款角色扮演游戏，玩家可以选择战斗或和平的方式与怪物互动。'
+            },
+            "以撒的结合": { 
+                english: "The Binding of Isaac", 
+                description: '《以撒的结合》是一款roguelike射击游戏，玩家操控以撒在地牢中探索和战斗。'
+            },
+            "杀戮尖塔": { 
+                english: "Slay the Spire", 
+                description: '《杀戮尖塔》是一款卡牌roguelike游戏，玩家组建卡组攀登尖塔。'
+            },
+            "暗黑地牢": { 
+                english: "Darkest Dungeon", 
+                description: '《暗黑地牢》是一款哥特式roguelike游戏，强调压力管理和团队建设。'
+            },
+            "黑帝斯": { 
+                english: "Hades", 
+                description: '《黑帝斯》是一款roguelike动作游戏，玩家操控冥王之子扎格列欧斯逃离冥界。'
+            },
+            "雨中冒险2": { 
+                english: "Risk of Rain 2", 
+                description: '《雨中冒险2》是一款3D roguelike射击游戏，玩家在外星环境中生存和探索。'
+            },
+            "星际拓荒": { 
+                english: "Outer Wilds", 
+                description: '《星际拓荒》是一款太空探索游戏，玩家在22分钟的时间循环中探索太阳系的秘密。'
+            },
+            "星际穿越": { 
+                english: "Outer Wilds", 
+                description: '《星际拓荒》是一款太空探索游戏，玩家在22分钟的时间循环中探索太阳系的秘密。'
+            },
+            "星际探索": { 
+                english: "Outer Wilds", 
+                description: '《星际拓荒》是一款太空探索游戏，玩家在22分钟的时间循环中探索太阳系的秘密。'
+            }
+        };
+
+        // 粒子背景特效
+        const canvas = document.getElementById('bgCanvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        class Particle {
+            constructor() {
+                this.x = Math.random() * canvas.width;
+                this.y = canvas.height + Math.random() * 100;
+                this.speed = 0.5 + Math.random() * 1.5;
+                this.size = 1 + Math.random() * 3;
+                this.opacity = 0.1 + Math.random() * 0.4;
+                this.color = Math.random() > 0.5 ? '#00a8ff' : '#66c0f4'; // Steam Blue
+            }
+
+            update() {
+                this.y -= this.speed;
+                if (this.y < -50) {
+                    this.y = canvas.height + 50;
+                    this.x = Math.random() * canvas.width;
+                }
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.globalAlpha = this.opacity;
+                ctx.fill();
+            }
+        }
+
+        function initParticles() {
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+            
+            for (let i = 0; i < 50; i++) {
+                particles.push(new Particle());
+            }
+            
+            animateParticles();
+        }
+
+        function animateParticles() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            particles.forEach(particle => {
+                particle.update();
+                particle.draw();
+            });
+            
+            requestAnimationFrame(animateParticles);
+        }
+
+        // 3D Tilt 效果
+        function initTilt() {
+            const cards = document.querySelectorAll('.tilt-card');
+            
+            cards.forEach(card => {
+                card.addEventListener('mousemove', (e) => {
+                    const rect = card.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    
+                    const centerX = rect.width / 2;
+                    const centerY = rect.height / 2;
+                    
+                    const rotateX = ((y - centerY) / centerY) * -2; // Max rotation 2deg (subtle)
+                    const rotateY = ((x - centerX) / centerX) * 2;
+                    
+                    card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
+                });
+                
+                card.addEventListener('mouseleave', () => {
+                    card.style.transform = 'perspective(1000px) rotateX(0) rotateY(0)';
+                });
+            });
+        }
+
+        // 打字机效果
+        function typeWriter(element, text, speed = 30) {
+            element.textContent = '';
+            element.classList.add('typing-cursor');
+            
+            let i = 0;
+            function type() {
+                if (i < text.length) {
+                    element.textContent += text.charAt(i);
+                    i++;
+                    setTimeout(type, speed);
+                } else {
+                    setTimeout(() => {
+                        element.classList.remove('typing-cursor');
+                    }, 1000);
+                }
+            }
+            
+            type();
+        }
+
+        // 初始化
+        function init() {
+            // 初始化特效
+            initParticles();
+            initTilt();
+            
+            // 事件监听
+            gameNameInput.addEventListener('input', handleInput);
+            clearBtn.addEventListener('click', clearInput);
+            translateBtn.addEventListener('click', translateGameName);
+            copyBtn.addEventListener('click', copyToClipboard);
+            closeNotification.addEventListener('click', hideNotification);
+            quickSelectBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    gameNameInput.value = btn.textContent;
+                    handleInput();
+                    translateGameName();
+                });
+            });
+            
+            // 按Enter键触发转换
+            gameNameInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    translateGameName();
+                }
+            });
+            
+            // 免费开玩按钮点击事件
+            playFreeBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                modalTargetUrl = playFreeBtn.href;
+                showFreePlayModal();
+            });
+            
+            moreHotLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                modalTargetUrl = moreHotLink.href;
+                showFreePlayModal();
+            });
+            
+            // 弹窗事件
+            closeFreePlayModal.addEventListener('click', hideFreePlayModal);
+            continueToSiteBtn.addEventListener('click', () => {
+                const target = modalTargetUrl || playFreeBtn.href;
+                window.open(target, '_blank');
+                hideFreePlayModal();
+            });
+            
+            // 复制账号
+            copyAccountBtn.addEventListener('click', async () => {
+                const textToCopy = 'GXZH001;gxzh001';
+                const labelEl = copyAccountBtn.querySelector('span');
+                const originalText = labelEl ? labelEl.textContent : '';
+                try {
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        await navigator.clipboard.writeText(textToCopy);
+                    } else {
+                        const textArea = document.createElement('textarea');
+                        textArea.value = textToCopy;
+                        document.body.appendChild(textArea);
+                        textArea.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(textArea);
+                    }
+                    showNotification('复制成功', '账号密码已复制到剪贴板', 'success');
+                    if (labelEl) {
+                        labelEl.textContent = '已复制';
+                        copyAccountBtn.classList.add('bg-success');
+                        setTimeout(() => {
+                            copyAccountBtn.classList.remove('bg-success');
+                            labelEl.textContent = originalText;
+                        }, 1500);
+                    }
+                } catch (err) {
+                    showNotification('错误', '复制失败，请手动复制', 'error');
+                }
+            });
+
+            document.querySelectorAll('.free-play-img').forEach(img => {
+                img.addEventListener('click', () => {
+                    zoomImage.src = img.src;
+                    imageZoomOverlay.classList.remove('hidden');
+                });
+            });
+
+            imageZoomOverlay.addEventListener('click', () => {
+                imageZoomOverlay.classList.add('hidden');
+                zoomImage.src = '';
+            });
+            
+            // 点击弹窗外部关闭
+            freePlayModal.addEventListener('click', (e) => {
+                if (e.target === freePlayModal) {
+                    hideFreePlayModal();
+                }
+            });
+        }
+
+        // 显示免费试玩弹窗
+        function showFreePlayModal() {
+            freePlayModal.classList.remove('hidden');
+            // 强制重绘以触发过渡动画
+            freePlayModal.offsetHeight;
+            freePlayModal.classList.remove('opacity-0');
+            freePlayModal.querySelector('div').classList.remove('scale-95');
+            freePlayModal.querySelector('div').classList.add('scale-100');
+        }
+
+        // 隐藏免费试玩弹窗
+        function hideFreePlayModal() {
+            freePlayModal.classList.add('opacity-0');
+            freePlayModal.querySelector('div').classList.remove('scale-100');
+            freePlayModal.querySelector('div').classList.add('scale-95');
+            
+            setTimeout(() => {
+                freePlayModal.classList.add('hidden');
+            }, 300);
+        }
+
+        // 处理输入
+        function handleInput() {
+            if (gameNameInput.value.trim()) {
+                clearBtn.style.display = 'block';
+            } else {
+                clearBtn.style.display = 'none';
+            }
+        }
+
+        // 清除输入
+        function clearInput() {
+            gameNameInput.value = '';
+            clearBtn.style.display = 'none';
+            gameNameInput.focus();
+        }
+
+        // 转换游戏名称
+        async function translateGameName() {
+            const chineseName = gameNameInput.value.trim();
+            
+            if (!chineseName) {
+                showNotification('错误', '请输入游戏名称', 'error');
+                return;
+            }
+            
+            // 显示加载状态
+            btnText.textContent = '转换中';
+            loadingSpinner.classList.remove('hidden');
+            translateBtn.disabled = true;
+            
+            try {
+                let result;
+                let isFromAI = false;
+                
+                // 检查本地数据库
+                if (gameDatabase[chineseName]) {
+                    result = {
+                        english: gameDatabase[chineseName].english,
+                        description: gameDatabase[chineseName].description
+                    };
+                    showNotification('成功', '从本地数据库找到游戏信息', 'success');
+                } else {
+                    // 显示AI调用状态
+                    btnText.textContent = 'AI分析中';
+                    
+                    // 调用星火AI API
+                    result = await callAIAPI(chineseName);
+                    isFromAI = true;
+                    
+                    showNotification('成功', 'AI已成功分析游戏信息', 'success');
+                }
+                
+                // 改变布局：从居中移动到顶部
+                mainContainer.classList.remove('justify-center');
+                mainContainer.classList.add('pt-10');
+                
+                // 显示结果
+                displayResult(result, chineseName, isFromAI);
+                
+            } catch (error) {
+                console.error('转换失败:', error);
+                
+                // 根据错误类型显示不同的提示信息
+                if (error.message.includes('AI服务暂不可用')) {
+                    showNotification('警告', 'AI服务暂不可用，使用备用方案', 'warning');
+                } else if (error.message.includes('AI响应格式错误')) {
+                    showNotification('警告', 'AI响应格式异常，使用智能解析', 'warning');
+                } else {
+                    showNotification('错误', '转换失败，请稍后重试', 'error');
+                }
+                
+                // 即使出错也尝试显示备用结果
+                try {
+                    const fallbackResult = getFallbackResult(chineseName);
+                    mainContainer.classList.remove('justify-center');
+                    mainContainer.classList.add('pt-10');
+                    displayResult(fallbackResult, chineseName, false);
+                } catch (fallbackError) {
+                    console.error('备用方案也失败:', fallbackError);
+                }
+            } finally {
+                // 恢复按钮状态
+                btnText.textContent = '转换';
+                loadingSpinner.classList.add('hidden');
+                translateBtn.disabled = false;
+            }
+        }
+
+        // 调用星火AI API进行游戏名称转换
+        async function callAIAPI(chineseName) {
+            // 检查AI API是否可用
+            if (typeof sparkAPI === 'undefined') {
+                throw new Error('AI服务暂不可用，请稍后重试');
+            }
+            
+            // 构建AI提示词
+            const prompt = `请将用户提供的中文游戏名"${chineseName}"转换为官方英文名：
+            
+要求：
+1. 输出该游戏在Steam平台上的官方英文名称
+2. 用不超过25个汉字简要描述游戏类型和核心特色
+3. 严格按照以下格式输出：
+游戏英文名；
+游戏信息......；
+------
+
+请确保格式准确，不要添加任何额外内容。`;
+
+            try {
+                // 显示AI调用状态
+                console.log('开始调用AI API...');
+                
+                // 调用星火AI API，添加超时控制
+                const response = await Promise.race([
+                    sparkAPI.sendMessage(prompt),
+                    new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('AI响应超时，请稍后重试')), 20000)
+                    )
+                ]);
+                
+                console.log('AI API调用成功，响应内容:', response.text);
+                
+                if (!response || !response.text) {
+                    throw new Error('AI响应格式错误');
+                }
+                
+                // 智能解析AI返回的信息
+                const parsedResult = parseAIResponse(response.text, chineseName);
+                
+                // 将新游戏添加到本地数据库，便于下次快速查询
+                if (!gameDatabase[chineseName]) {
+                    gameDatabase[chineseName] = {
+                        english: parsedResult.english,
+                        description: parsedResult.description
+                    };
+                }
+                
+                return parsedResult;
+                
+            } catch (error) {
+                console.error('AI调用失败:', error);
+                
+                // 根据错误类型提供更详细的提示
+                if (error.message.includes('超时')) {
+                    throw new Error('AI响应超时，网络连接可能较慢，请稍后重试');
+                } else if (error.message.includes('连接')) {
+                    throw new Error('无法连接到AI服务，请检查网络连接');
+                } else {
+                    throw new Error('AI服务暂时不可用，请稍后重试');
+                }
+            }
+        }
+        
+        // 智能解析AI返回的信息
+        function parseAIResponse(aiText, originalName) {
+            // 清理AI返回的文本
+            const cleanText = aiText.replace(/\n+/g, '\n').trim();
+            
+            // 尝试按指定格式解析
+            const lines = cleanText.split('\n');
+            let englishName = '';
+            let description = '';
+            
+            // 查找英文名称（第一行或包含英文名的行）
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (line && !line.includes('；') && !line.includes('------') && 
+                    line.length > 2 && /[a-zA-Z]/.test(line)) {
+                    englishName = line.replace(/^游戏英文名[：:]?\s*/i, '').trim();
+                    break;
+                }
+            }
+            
+            // 查找游戏描述信息
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (line.includes('；') || line.includes('游戏信息')) {
+                    description = line.replace(/^游戏信息[：:]?\s*/i, '').replace(/；$/, '').trim();
+                    break;
+                }
+            }
+            
+            // 如果格式解析失败，尝试智能提取
+            if (!englishName || !description) {
+                return extractGameInfoFromText(cleanText, originalName);
+            }
+            
+            // 验证提取结果
+            if (!englishName || englishName.length < 2) {
+                englishName = generateFallbackEnglishName(originalName);
+            }
+            
+            if (!description || description.length < 5) {
+                description = `这是一款名为"${originalName}"的游戏，详细信息请查阅Steam商店。`;
+            }
+            
+            return {
+                english: englishName,
+                description: description
+            };
+        }
+        
+        // 从文本中智能提取游戏信息
+        function extractGameInfoFromText(text, originalName) {
+            let englishName = '';
+            let description = '';
+            
+            // 查找可能的英文名称（包含大写字母和空格的字符串）
+            const englishMatch = text.match(/[A-Z][a-zA-Z\s]{2,50}(?:\.|,|;|$)/);
+            if (englishMatch) {
+                englishName = englishMatch[0].trim().replace(/[.,;]$/, '');
+            }
+            
+            // 查找中文描述（25个汉字以内）
+            const chineseMatch = text.match(/[\u4e00-\u9fa5]{10,50}(?:\.|,|;|$)/);
+            if (chineseMatch) {
+                description = chineseMatch[0].trim().replace(/[.,;]$/, '');
+                // 限制在25个汉字以内
+                if (description.length > 25) {
+                    description = description.substring(0, 25) + '...';
+                }
+            }
+            
+            // 如果提取失败，使用备用方案
+            if (!englishName) {
+                englishName = generateFallbackEnglishName(originalName);
+            }
+            
+            if (!description) {
+                description = `这是一款名为"${originalName}"的游戏，详细信息请查阅Steam商店。`;
+            }
+            
+            return {
+                english: englishName,
+                description: description
+            };
+        }
+        
+        // 生成备用英文名称
+        function generateFallbackEnglishName(chineseName) {
+            // 简单的音译转换（实际应用中可以使用更复杂的转换逻辑）
+            const pinyinMap = {
+                '赛博朋克': 'Cyberpunk',
+                '艾尔登': 'Elden',
+                '法环': 'Ring',
+                '博德之门': 'Baldur\'s Gate',
+                '幻兽': 'Pal',
+                '帕鲁': 'World',
+                '使命召唤': 'Call of Duty'
+            };
+            
+            let englishName = chineseName;
+            Object.keys(pinyinMap).forEach(key => {
+                englishName = englishName.replace(key, pinyinMap[key]);
+            });
+            
+            // 如果转换后还是中文，使用拼音首字母
+            if (/[\u4e00-\u9fa5]/.test(englishName)) {
+                // 简单的拼音转换（实际应用中可以使用专业的拼音库）
+                englishName = englishName.split('').map(char => {
+                    if (/[\u4e00-\u9fa5]/.test(char)) {
+                        return char.charCodeAt(0).toString(16).toUpperCase();
+                    }
+                    return char;
+                }).join('');
+            }
+            
+            return englishName || 'Unknown Game';
+        }
+        
+        // 获取备用结果（当AI调用失败时使用）
+        function getFallbackResult(chineseName) {
+            return {
+                english: generateFallbackEnglishName(chineseName),
+                description: `这是一款名为"${chineseName}"的游戏，详细信息请查阅Steam商店。`
+            };
+        }
+
+        // 显示结果
+        function displayResult(result, chineseName, isFromAI = false) {
+            englishNameInput.value = result.english;
+            
+            // 添加AI来源标识
+            let descriptionText = result.description;
+            if (isFromAI) {
+                descriptionText += ' \n\n[AI智能分析结果]';
+            }
+            
+            typeWriter(gameDescription, descriptionText);
+            
+            // 生成Steam搜索链接
+            const searchQuery = encodeURIComponent(result.english);
+            const searchUrl = `https://store.steampowered.com/search/?term=${searchQuery}`;
+            steamLink.href = searchUrl;
+            
+            // 生成免费开玩搜索链接
+            const freeSearchQuery = encodeURIComponent(chineseName);
+            const freeSearchUrl = `https://www.yxk111.com/?s=${freeSearchQuery}`;
+            playFreeBtn.href = freeSearchUrl;
+            
+            // 显示结果区域
+            resultArea.classList.remove('hidden');
+            
+            // 添加AI标识样式
+            if (isFromAI) {
+                resultArea.classList.add('border-accent', 'shadow-lg');
+                
+                // 添加AI标识图标
+                const aiBadge = document.createElement('div');
+                aiBadge.className = 'absolute -top-2 -right-2 bg-accent text-white text-xs px-2 py-1 rounded-full flex items-center';
+                aiBadge.innerHTML = '<i class="fa fa-robot mr-1"></i>AI分析';
+                resultArea.appendChild(aiBadge);
+            }
+            
+            // 滚动到结果区域
+            resultArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        // 复制到剪贴板
+        function copyToClipboard() {
+            englishNameInput.select();
+            document.execCommand('copy');
+            
+            showNotification('成功', '已复制到剪贴板', 'success');
+        }
+
+        // 显示通知
+        function showNotification(title, message, type = 'info') {
+            notificationTitle.textContent = title;
+            notificationMessage.textContent = message;
+            
+            // 设置图标和颜色
+            switch (type) {
+                case 'success':
+                    notificationIcon.innerHTML = '<i class="fa fa-check-circle"></i>';
+                    notificationIcon.className = 'text-success mr-3 text-xl';
+                    break;
+                case 'error':
+                    notificationIcon.innerHTML = '<i class="fa fa-exclamation-circle"></i>';
+                    notificationIcon.className = 'text-red-500 mr-3 text-xl';
+                    break;
+                case 'warning':
+                    notificationIcon.innerHTML = '<i class="fa fa-exclamation-triangle"></i>';
+                    notificationIcon.className = 'text-yellow-500 mr-3 text-xl';
+                    break;
+                default:
+                    notificationIcon.innerHTML = '<i class="fa fa-info-circle"></i>';
+                    notificationIcon.className = 'text-accent mr-3 text-xl';
+            }
+            
+            // 显示通知
+            notification.classList.remove('translate-y-20', 'opacity-0');
+            
+            // 自动隐藏
+            clearTimeout(window.notificationTimeout);
+            window.notificationTimeout = setTimeout(hideNotification, 3000);
+        }
+
+        // 隐藏通知
+        function hideNotification() {
+            notification.classList.add('translate-y-20', 'opacity-0');
+        }
+
+        // 初始化应用
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

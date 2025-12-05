@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI功能测试</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <script src="./spark-api.js"></script>
+    <script src="./init-spark.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .test-area { margin: 20px 0; padding: 20px; border: 1px solid #ccc; }
+        button { padding: 10px 20px; margin: 5px; }
+        .result { margin-top: 10px; padding: 10px; background: #f5f5f5; }
+        .success { color: green; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <h1>AI功能测试页面</h1>
+    
+    <div class="test-area">
+        <h2>1. API初始化测试</h2>
+        <button onclick="testAPIInit()">测试API初始化</button>
+        <div id="initResult" class="result"></div>
+    </div>
+    
+    <div class="test-area">
+        <h2>2. AI调用测试</h2>
+        <input type="text" id="gameName" placeholder="输入中文游戏名" value="巫师3">
+        <button onclick="testAICall()">测试AI调用</button>
+        <div id="aiResult" class="result"></div>
+    </div>
+    
+    <div class="test-area">
+        <h2>3. 解析逻辑测试</h2>
+        <textarea id="aiResponse" rows="5" cols="50" placeholder="粘贴AI返回的文本">The Witcher 3: Wild Hunt；
+开放世界角色扮演游戏，猎魔人杰洛特的史诗冒险；
+------</textarea>
+        <button onclick="testParsing()">测试解析逻辑</button>
+        <div id="parseResult" class="result"></div>
+    </div>
+    
+    <script>
+        function testAPIInit() {
+            const resultDiv = document.getElementById('initResult');
+            
+            if (typeof sparkAPI === 'undefined') {
+                resultDiv.innerHTML = '<span class="error">❌ sparkAPI对象未定义</span>';
+                return;
+            }
+            
+            try {
+                // 检查API是否已初始化
+                if (sparkAPI.isInitialized && sparkAPI.isInitialized()) {
+                    resultDiv.innerHTML = '<span class="success">✅ API初始化成功</span>';
+                } else {
+                    resultDiv.innerHTML = '<span class="error">❌ API未正确初始化</span>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">❌ 初始化测试失败: ${error.message}</span>`;
+            }
+        }
+        
+        async function testAICall() {
+            const gameName = document.getElementById('gameName').value;
+            const resultDiv = document.getElementById('aiResult');
+            resultDiv.innerHTML = '调用中...';
+            
+            if (!gameName) {
+                resultDiv.innerHTML = '<span class="error">❌ 请输入游戏名称</span>';
+                return;
+            }
+            
+            if (typeof sparkAPI === 'undefined') {
+                resultDiv.innerHTML = '<span class="error">❌ sparkAPI对象未定义</span>';
+                return;
+            }
+            
+            const prompt = `请将用户提供的中文游戏名"${gameName}"转换为官方英文名：
+            
+要求：
+1. 输出该游戏在Steam平台上的官方英文名称
+2. 用不超过25个汉字简要描述游戏类型和核心特色
+3. 严格按照以下格式输出：
+游戏英文名；
+游戏信息......;
+------
+
+请确保格式准确，不要添加任何额外内容。`;
+
+            try {
+                const response = await sparkAPI.sendMessage(prompt);
+                resultDiv.innerHTML = `<span class="success">✅ AI调用成功</span><br><pre>${JSON.stringify(response, null, 2)}</pre>`;
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">❌ AI调用失败: ${error.message}</span>`;
+            }
+        }
+        
+        function testParsing() {
+            const aiText = document.getElementById('aiResponse').value;
+            const resultDiv = document.getElementById('parseResult');
+            
+            if (!aiText) {
+                resultDiv.innerHTML = '<span class="error">❌ 请输入AI返回的文本</span>';
+                return;
+            }
+            
+            // 测试解析逻辑（复制自index.html）
+            const cleanText = aiText.replace(/\n+/g, '\n').trim();
+            const lines = cleanText.split('\n');
+            let englishName = '';
+            let description = '';
+            
+            // 查找英文名称
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (line && !line.includes('；') && !line.includes('------') && 
+                    line.length > 2 && /[a-zA-Z]/.test(line)) {
+                    englishName = line.replace(/^游戏英文名[：:]?\s*/i, '').trim();
+                    break;
+                }
+            }
+            
+            // 查找游戏描述信息
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (line.includes('；') || line.includes('游戏信息')) {
+                    description = line.replace(/^游戏信息[：:]?\s*/i, '').replace(/；$/, '').trim();
+                    break;
+                }
+            }
+            
+            resultDiv.innerHTML = `
+                <span class="success">✅ 解析结果：</span><br>
+                <strong>英文名称：</strong> ${englishName || '未找到'}<br>
+                <strong>游戏描述：</strong> ${description || '未找到'}<br>
+                <strong>原始文本：</strong><pre>${cleanText}</pre>
+            `;
+        }
+        
+        // 页面加载后自动测试API初始化
+        setTimeout(testAPIInit, 1000);
+    </script>
+</body>
+</html>
